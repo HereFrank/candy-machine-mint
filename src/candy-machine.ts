@@ -30,6 +30,7 @@ interface CandyMachineState {
   itemsRedeemed: number;
   itemsRemaining: number;
   goLiveDate: Date,
+  tokenMint?: anchor.web3.PublicKey;
 }
 
 export const awaitTransactionSignatureConfirmation = async (
@@ -177,6 +178,7 @@ export const getCandyMachineState = async (
   const itemsAvailable = state.data.itemsAvailable.toNumber();
   const itemsRedeemed = state.itemsRedeemed.toNumber();
   const itemsRemaining = itemsAvailable - itemsRedeemed;
+  const tokenMint = state.tokenMint;
 
   let goLiveDate = state.data.goLiveDate.toNumber();
   goLiveDate = new Date(goLiveDate * 1000);
@@ -186,6 +188,8 @@ export const getCandyMachineState = async (
     itemsRedeemed,
     itemsRemaining,
     goLiveDate,
+    tokenMint
+
   })
 
   return {
@@ -194,6 +198,7 @@ export const getCandyMachineState = async (
     itemsRedeemed,
     itemsRemaining,
     goLiveDate,
+    tokenMint
   };
 }
 
@@ -245,6 +250,7 @@ export const mintOneToken = async (
   config: anchor.web3.PublicKey, // feels like this should be part of candyMachine?
   payer: anchor.web3.PublicKey,
   treasury: anchor.web3.PublicKey,
+  associatedTokenAccountAddress?: anchor.web3.PublicKey,
 ): Promise<string> => {
   const mint = anchor.web3.Keypair.generate();
   const token = await getTokenWallet(payer, mint.publicKey);
@@ -255,6 +261,13 @@ export const mintOneToken = async (
   const rent = await connection.getMinimumBalanceForRentExemption(
     MintLayout.span
   );
+
+  const remainingAccounts = [];
+  if (associatedTokenAccountAddress) {
+    console.log("here", associatedTokenAccountAddress);
+    remainingAccounts.push({ pubkey: associatedTokenAccountAddress, isWritable: true, isSigner: false });
+    remainingAccounts.push({ pubkey: payer, isWritable: false, isSigner: true });
+  }
 
   return await program.rpc.mintNft({
     accounts: {
@@ -274,6 +287,7 @@ export const mintOneToken = async (
       clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
     },
     signers: [mint],
+    remainingAccounts,
     instructions: [
       anchor.web3.SystemProgram.createAccount({
         fromPubkey: payer,
